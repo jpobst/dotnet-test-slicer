@@ -17,7 +17,7 @@
     <PackageTags>NUnit test slicer unit parallel</PackageTags>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-test-slicer</ToolCommandName>
-    <PackageOutputPath>nupkg</PackageOutputPath>
+    <PackageOutputPath>../../nupkg</PackageOutputPath>
   </PropertyGroup>
   
   <ItemGroup>
