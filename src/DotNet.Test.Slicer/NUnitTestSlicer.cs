@@ -76,8 +76,9 @@ namespace DotNet.Test.Slicer
 
 		private static string BuildFilter (List<string> tests)
 		{
-			// We're going to quote our test names with single quotes, but we'll need to escape them if the test name contains them
-			var result = string.Join (" or ", tests.Select (s => $"test == '{s.Replace ("'", @"\'")}'"));
+			// We're going to quote our test names with single quotes, but we'll need to escape them if the test name contains them.
+			// We also have to escape backslashes in test names.
+			var result = string.Join (" or ", tests.Select (s => $"test == '{s.Replace (@"\", @"\\").Replace ("'", @"\'")}'"));
 
 			return result;
 		}

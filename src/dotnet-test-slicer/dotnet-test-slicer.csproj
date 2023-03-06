@@ -10,7 +10,7 @@
 
   <PropertyGroup>
     <PackageId>dotnet-test-slicer</PackageId>
-    <Version>0.1.0-alpha1</Version>
+    <Version>0.1.0-alpha2</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/jpobst/dotnet-test-slicer</PackageProjectUrl>
     <Description>Unit test slicer to support running NUnit tests on multiple test agents using 'dotnet test'.</Description>
