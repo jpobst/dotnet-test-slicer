@@ -1,99 +1,113 @@
-using NUnit.Engine;
-using System.Xml;
+namespace DotNet.Test.Slicer;
 
-namespace DotNet.Test.Slicer
+public static class NUnitTestSlicer
 {
-	public static class NUnitTestSlicer
+	public static void SliceAndOutput (string testAssembly, string? filterString, int sliceNumber, int totalSlices, string outFile, string balanceFile)
 	{
-		public static void Slice (string testAssembly, string? filterString, int sliceNumber, int totalSlices, string outFile)
-		{
-			var all_tests = GetFilteredTestCases (testAssembly, filterString);
-			Console.WriteLine ($"Found {all_tests.Count} matching tests.");
+		var balancer = TestBalancer.FromXml (balanceFile);
+		var all_tests = NUnitTestDiscoverer.GetFilteredTestCases (testAssembly, filterString);
+
+		Console.WriteLine ($"Found {all_tests.Count} matching tests.");
+		Console.WriteLine ();
+
+		var manager = SliceTestCases (all_tests, totalSlices, balancer);
+		var slice = manager.Slices.Single (s => s.SliceId == sliceNumber);
+
+		LogTestSlice (balancer, slice);
+
+		NUnitRunSettingsWriter.WriteWithTestCaseFilter (slice.Tests.Select (t => t.Name).ToList (), outFile);
+	}
+
+	public static List<string> Slice (string testAssembly, string? filterString, int sliceNumber, int totalSlices, TestBalancer balancer)
+	{
+		var all_tests = NUnitTestDiscoverer.GetFilteredTestCases (testAssembly, filterString);
+		var sliced_tests = SliceTestCases (all_tests, totalSlices, balancer);
+
+		return sliced_tests.Slices.Single (s => s.SliceId == sliceNumber).Tests.Select (t => t.Name).ToList ();
+	}
+
+	private static SliceManager SliceTestCases (List<string> tests, int totalSlices, TestBalancer balancer)
+	{
+		var tests_and_durations = tests.Select (t => balancer.GetTestDuration (t)).ToArray ();
+
+		// We need a canonical sort so all slices are picking from the same order
+		tests_and_durations = tests_and_durations.OrderByDescending (t => t.Duration).ThenBy (t => t.Name).ToArray ();
+		tests.Sort ();
+
+		var slices = new SliceManager (totalSlices);
+
+		foreach (var test in tests_and_durations)
+			slices.AddTest (test);
+
+		return slices;
+	}
+
+	private static void LogTestSlice (TestBalancer balancer, SliceClass slice)
+	{
+		Console.WriteLine ($"{slice.Tests.Count} tests chosen for this slice to run:");
+
+		var max = slice.Tests.Max (t => t.Duration).ToString ().Length;
+
+		foreach (var s in slice.Tests.OrderBy (t => t.IsEstimatedDuration).ThenByDescending (t => t.Duration).ThenBy (t => t.Name)) {
+			var timing_prefix = balancer.IsEmpty ? "" : (s.IsEstimatedDuration ? "?" : s.Duration + "ms").PadLeft (max + 2) + " ";
+			Console.WriteLine ($"- {timing_prefix}{s.Name}");
+		}
+
+		Console.WriteLine ();
+
+		if (!balancer.IsEmpty) {
+			Console.WriteLine ($"Estimated Duration: {slice.Tests.Sum (t => t.Duration)}ms");
 			Console.WriteLine ();
-
-			var sliced_tests = SliceTestCases (all_tests, sliceNumber, totalSlices);
-			LogTestSlice (sliced_tests);
-
-			var filter = BuildFilter (sliced_tests);
-
-			OutputRunSettingsFile (filter, outFile);
 		}
 
-		private static List<string> GetFilteredTestCases (string testAssembly, string? filterString)
+		if (!balancer.IsEmpty && balancer.UntimedTests.Any ()) {
+			Console.WriteLine ($"Timing data is missing for {balancer.UntimedTests.Count} tests in test assembly:");
+
+			foreach (var test in balancer.UntimedTests)
+				Console.WriteLine ($"- {test}");
+
+			Console.WriteLine ();
+		}
+	}
+
+	class SliceManager
+	{
+		public List<SliceClass> Slices { get; } = new List<SliceClass> ();
+
+		public SliceManager (int sliceCount)
 		{
-			// Set up the test assembly
-			var package = new TestPackage (testAssembly);
-			package.AddSetting ("WorkDirectory", Path.GetDirectoryName (testAssembly));
-
-			using var engine = TestEngineActivator.CreateInstance ();
-
-			// Set up the filter
-			TestFilter? filter = null;
-
-			if (!string.IsNullOrWhiteSpace (filterString)) {
-				var filterService = engine.Services.GetService<ITestFilterService> ();
-
-				var builder = filterService.GetTestFilterBuilder ();
-				builder.SelectWhere (filterString);
-				filter = builder.GetFilter ();
-			}
-
-			// Do test discovery
-			using ITestRunner runner = engine.GetRunner (package);
-			var tests = runner.Explore (filter);
-
-			// Extract test names
-			var results = new List<string> ();
-			var nodes = tests.SelectNodes ("//test-case");
-
-			if (nodes is not null)
-				foreach (var element in nodes.Cast<XmlElement> ())
-					results.Add (element.GetAttribute ("fullname"));
-
-			return results;
+			for (var i = 1; i <= sliceCount; i++)
+				Slices.Add (new SliceClass { SliceId = i });
 		}
 
-		private static List<string> SliceTestCases (List<string> tests, int sliceNumber, int totalSlices)
+		public void AddTest (TestAndDuration test)
 		{
-			// We need a canonical sort so all slices are picking from the same order
-			tests.Sort ();
+			var shortest_slice = Slices.OrderBy (s => s.ExpectedDuration).First ();
 
-			var results = new List<string> ();
-
-			for (var i = sliceNumber; i <= tests.Count; i += totalSlices)
-				results.Add (tests [i - 1]);
-
-			return results;
+			shortest_slice.Tests.Add (test);
 		}
+	}
 
-		private static void LogTestSlice (List<string> tests)
+	class SliceClass
+	{
+		public int SliceId { get; init; }
+		public List<TestAndDuration> Tests { get; } = new List<TestAndDuration> ();
+		public int ExpectedDuration => Tests.Sum (t => t.Duration);
+	}
+
+	public class TestAndDuration
+	{
+		public string Name { get; set; }
+
+		public int Duration { get; set; }
+
+		public bool IsEstimatedDuration { get; set; }
+
+		public TestAndDuration (string name, int duration, bool isEstimatedDuration)
 		{
-			Console.WriteLine ($"{tests.Count} tests chosen for this slice to run:");
-
-			foreach (var s in tests)
-				Console.WriteLine ($"- {s}");
-		}
-
-		private static string BuildFilter (List<string> tests)
-		{
-			// We're going to quote our test names with single quotes, but we'll need to escape them if the test name contains them.
-			// We also have to escape backslashes in test names.
-			var result = string.Join (" or ", tests.Select (s => $"test == '{s.Replace (@"\", @"\\").Replace ("'", @"\'")}'"));
-
-			return result;
-		}
-
-		private static void OutputRunSettingsFile (string filter, string outFile)
-		{
-			using var xw = XmlWriter.Create (outFile);
-
-			xw.WriteStartElement ("RunSettings");
-			xw.WriteStartElement ("NUnit");
-
-			xw.WriteElementString ("Where", filter);
-
-			xw.WriteEndElement ();
-			xw.WriteEndElement ();
+			Name = name;
+			Duration = duration;
+			IsEstimatedDuration = isEstimatedDuration;
 		}
 	}
 }
