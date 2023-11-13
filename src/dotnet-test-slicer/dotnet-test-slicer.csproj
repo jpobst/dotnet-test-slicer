@@ -6,11 +6,12 @@
     <RootNamespace>dotnet_test_slicer</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <PropertyGroup>
     <PackageId>dotnet-test-slicer</PackageId>
-    <Version>0.1.0-alpha5</Version>
+    <Version>0.1.0-alpha6</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/jpobst/dotnet-test-slicer</PackageProjectUrl>
     <Description>Unit test slicer to support running NUnit tests on multiple test agents using 'dotnet test'.</Description>

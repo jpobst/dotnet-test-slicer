@@ -44,6 +44,9 @@ public static class NUnitTestSlicer
 
 	private static void LogTestSlice (TestBalancer balancer, SliceClass slice)
 	{
+		if (slice.Tests.Count == 0)
+			return;
+
 		Console.WriteLine ($"{slice.Tests.Count} tests chosen for this slice to run:");
 
 		var max = slice.Tests.Max (t => t.Duration).ToString ().Length;
