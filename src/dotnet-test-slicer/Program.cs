@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Runtime.InteropServices;
 using DotNet.Test.Slicer;
 
 namespace dotnet_test_slicer;
@@ -79,6 +80,9 @@ class Program
 
 	static void RunSliceVerb (string testAssembly, int sliceNumber, int totalSlices, string outfile, string testFilter, string balanceFile)
 	{
+		Console.WriteLine ($".NET Runtime Version: {RuntimeInformation.FrameworkDescription}");
+		Console.WriteLine ();
+
 		Console.WriteLine ("Arguments:");
 		Console.WriteLine ($"- Test Assembly: {testAssembly}");
 		Console.WriteLine ($"- Slice Number: {sliceNumber}");
